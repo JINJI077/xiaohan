@@ -1,57 +1,76 @@
 # ADHD 事项启动器 Demo
 
-## 直接使用（不启用 AI）
+把一个“大任务”拆成可以马上开始的小步骤。项目可以离线使用，也可以通过本地代理调用 DeepSeek/OpenAI 兼容接口启用 AI 拆解。
 
-- 双击打开 `index.html`
-- 不需要安装任何依赖
+## 推荐用法：启用 AI
 
-注意：这种打开方式是 `file://`，只能使用“本地规则拆解”（不是 AI 输出）。
+给别人使用时，推荐让对方按下面步骤操作：
 
-## 启用 AI（推荐：Proxy 本地代理）
+1. 安装 Node.js 18 或更新版本：<https://nodejs.org/>
+2. 下载并解压整个项目文件夹，不要只拷贝 `index.html`。
+3. 双击项目里的 `start.bat`。
+4. 浏览器会自动打开 `http://127.0.0.1:5173/`。
+5. 展开页面里的 “API 设置（可选 / optional）”，填写：
+   - 调用方式：`本地代理（推荐）/ Proxy`
+   - API Key：你的 DeepSeek/OpenAI 兼容 Key
+   - Base URL：默认 `https://api.deepseek.com`，也可以填其他 OpenAI-compatible 地址
+   - Model：默认 `deepseek-chat`
 
-### 1) 安装 Node.js
+使用 AI 时请保持 `start.bat` 打开的窗口不要关闭；关闭窗口后本地代理会停止。
 
-- 建议 Node.js 18+（本项目代理使用全局 fetch）
+## 离线用法：不启用 AI
 
-### 2) 启动本地服务
+- 可以直接双击 `index.html`。
+- 这种方式是 `file://` 页面，只能使用内置的本地规则拆解，不会调用 AI。
+- 如果你看到“当前使用本地规则（不是 AI）”，说明 AI 没有成功启用。
 
-在仓库根目录执行：
+## 为什么双击 HTML 不能调用 AI？
+
+浏览器直接打开 `index.html` 时，页面地址是 `file://`。此时默认的 Proxy 请求 `/api/llm/chat` 没有本地服务器接收，所以 AI 请求不会成功。
+
+Direct 直连 API 也不推荐：很多 API 服务会被浏览器 CORS 策略拦截，而且 API Key 会暴露在前端页面里。这个项目推荐用 `start.bat` 启动本地代理，再从 `http://127.0.0.1:5173/` 打开页面。
+
+## 手动启动
+
+如果不想双击脚本，也可以在项目目录中运行：
 
 ```bash
-node adhd-demo/local-proxy.mjs
+node local-proxy.mjs
 ```
 
-或 Windows 直接双击：
+然后打开：
 
-- `adhd-demo/start.bat`
+```text
+http://127.0.0.1:5173/
+```
 
-启动成功会输出类似：
+如果端口被占用，可以换端口：
 
-- `http://localhost:5173/`（如 localhost 解析异常，可改用 `http://127.0.0.1:5173/`）
+```bat
+set PORT=3000 && start.bat
+```
 
-用浏览器打开这个地址（不要再双击 index.html）。
+或：
 
-### 3) 在页面里填 API Key
-
-展开 “API 设置（可选 / optional）”：
-
-- 调用方式：选择 “本地代理（推荐）/ Proxy”
-- API Key：填入你的 Key（只保存在你的浏览器本地）
-- Base URL：默认是 `https://api.deepseek.com`（也可填 OpenAI 兼容地址）
-- Model：默认 `deepseek-chat`
+```bat
+set PORT=3000 && node local-proxy.mjs
+```
 
 ## 常见问题
 
-### “AI 生成功能前几步都一模一样”
+### “生成出来前几步总是一模一样”
 
-通常表示并没有成功调用 AI，而是降级使用了本地规则拆解：
+通常表示没有成功调用 AI，而是降级用了本地规则。请检查：
 
-- Proxy 模式但你是双击 index.html（file://）打开
-- Proxy 模式但本地服务没启动
-- Direct 模式被浏览器 CORS 拦截
-- Key/URL 配置不完整
+- 是否是双击 `index.html` 打开的 `file://` 页面。
+- 是否已经双击 `start.bat` 并打开了 `http://127.0.0.1:5173/`。
+- `start.bat` 窗口是否还开着。
+- API Key、Base URL、Model 是否填写并保存。
+- Direct 模式是否被浏览器 CORS 拦截。
 
-### “别人电脑上启动服务失败”
+### “别人电脑上启动失败”
 
-- 报 `fetch is not defined` / 类似错误：升级到 Node.js 18+
-- 端口被占用：设置 `PORT` 环境变量换端口（例如 Windows：`set PORT=3000` 后再启动）
+- 提示未检测到 Node.js：安装 Node.js 18+。
+- 提示 Node 版本太低：升级 Node.js。
+- 提示端口被占用：关闭占用端口的程序，或运行 `set PORT=3000 && start.bat`。
+- 浏览器打开后仍不是 AI：确认打开的是 `http://127.0.0.1:5173/`，不是本地文件 `index.html`。

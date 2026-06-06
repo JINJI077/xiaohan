@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const port = Number.parseInt(process.env.PORT || "5173", 10);
+const host = process.env.HOST || "127.0.0.1";
 const defaultBaseUrl = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 const defaultApiKey = process.env.DEEPSEEK_API_KEY || "";
 
@@ -18,6 +19,10 @@ if (typeof globalThis.fetch !== "function") {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
+
+    if (req.method === "GET" && url.pathname === "/api/health") {
+      return sendJson(res, 200, { ok: true, service: "adhd-demo-local-proxy" });
+    }
 
     if (req.method === "POST" && url.pathname === "/api/llm/chat") {
       const body = await readJson(req);
@@ -77,10 +82,23 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(port, () => {
-  process.stdout.write(`http://localhost:${port}/\n`);
-  process.stdout.write(`Proxy API: POST http://localhost:${port}/api/llm/chat\n`);
-  process.stdout.write(`Change port: set PORT=3000 (Windows) or PORT=3000 node local-proxy.mjs\n`);
+server.on("error", (err) => {
+  if (err?.code === "EADDRINUSE") {
+    process.stderr.write(`\nPort ${port} is already in use. / 端口 ${port} 已被占用。\n`);
+    process.stderr.write("Windows can retry with another port: set PORT=3000 && node local-proxy.mjs\n");
+    process.stderr.write("Or close the other program that is using this port, then run start.bat again.\n\n");
+    process.exit(1);
+  }
+  process.stderr.write(`\nFailed to start local proxy: ${err?.message || err}\n\n`);
+  process.exit(1);
+});
+
+server.listen(port, host, () => {
+  process.stdout.write("\nADHD Demo local proxy is running. / 本地代理已启动。\n");
+  process.stdout.write(`Open this URL, not index.html: http://${host}:${port}/\n`);
+  process.stdout.write(`Proxy API: POST http://${host}:${port}/api/llm/chat\n`);
+  process.stdout.write("Keep this window open while using AI. / 使用 AI 时请保持这个窗口运行。\n");
+  process.stdout.write("Change port on Windows: set PORT=3000 && node local-proxy.mjs\n\n");
 });
 
 function resolveStaticPath(p) {

@@ -13,6 +13,7 @@ const els = {
   apiKey: document.getElementById("apiKey"),
   apiModel: document.getElementById("apiModel"),
   aiNotes: document.getElementById("aiNotes"),
+  aiStatus: document.getElementById("aiStatus"),
   settingsHint: document.getElementById("settingsHint"),
   toast: document.querySelector(".toast"),
   confetti: document.getElementById("confetti"),
@@ -30,6 +31,7 @@ function boot() {
   render();
   wire();
   registerServiceWorker();
+  refreshAiStatus();
   maybeGenerateAiNotes();
   if (!state.steps || state.steps.length === 0) setBubble(pickMessage("idle"));
 }
@@ -58,7 +60,14 @@ function wire() {
     els.apiMode.addEventListener("change", () => {
       const v = String(els.apiMode.value || "proxy");
       setSettingsHint(buildModeHint(v));
+      refreshAiStatus();
     });
+  }
+
+  for (const el of [els.apiBaseUrl, els.apiKey, els.apiModel, els.aiNotes]) {
+    if (!el) continue;
+    el.addEventListener("input", refreshAiStatus);
+    el.addEventListener("change", refreshAiStatus);
   }
 
   els.taskInput.addEventListener("keydown", (e) => {
@@ -128,7 +137,7 @@ function onGenerate() {
     return generateWithLocal(text, {
       aiFailed: true,
       reason: "proxy_requires_http",
-      errorMessage: "Proxy needs a local server. Run: node adhd-demo/local-proxy.mjs then open http://localhost:5173/ 代理模式需要本地服务：运行 node adhd-demo/local-proxy.mjs 并用 http://localhost:5173/ 打开。",
+      errorMessage: "Proxy needs start.bat. Double-click start.bat, then use http://127.0.0.1:5173/ 代理模式需要双击 start.bat，再用 http://127.0.0.1:5173/ 打开。",
     });
   }
 
@@ -197,9 +206,13 @@ function setStepsFromTexts(stepsText, { source } = {}) {
   );
   saveState();
   render();
-  if (source === "ai") toast("AI done ✨ / AI 拆解完成");
-  else toast(pickMessage("generated"));
-  setBubble(pickMessage("start"));
+  if (source === "ai") {
+    toast("AI done ✨ / AI 拆解完成");
+    setBubble(pickMessage("start"));
+  } else {
+    toast("Local rules ready (not AI). / 本地规则已生成（不是 AI）。");
+    setBubble("Local rules (not AI). / 当前使用本地规则（不是 AI）。");
+  }
   maybeGenerateAiNotes();
 }
 
@@ -214,6 +227,7 @@ function onSaveSettings() {
   state.settings = next;
   saveState();
   setSettingsHint("Saved. / 已保存。");
+  refreshAiStatus();
   toast("Saved ✅ / 已保存");
   maybeGenerateAiNotes();
 }
@@ -229,6 +243,44 @@ function hydrateSettingsUI() {
   setSettingsHint(buildModeHint(s.mode));
 }
 
+function refreshAiStatus() {
+  if (!els.aiStatus) return;
+  const s = readSettingsFromUI();
+  const { text, level } = getAiStatus(s);
+  els.aiStatus.textContent = text;
+  els.aiStatus.className = `ai-status ai-status-${level}`;
+}
+
+function readSettingsFromUI() {
+  return {
+    mode: String(els.apiMode?.value ?? state.settings?.mode ?? "proxy") === "direct" ? "direct" : "proxy",
+    baseUrl: String(els.apiBaseUrl?.value ?? state.settings?.baseUrl ?? "").trim(),
+    apiKey: String(els.apiKey?.value ?? state.settings?.apiKey ?? "").trim(),
+    model: String(els.apiModel?.value ?? state.settings?.model ?? "deepseek-chat").trim() || "deepseek-chat",
+    aiNotes: Boolean(els.aiNotes?.checked ?? state.settings?.aiNotes),
+  };
+}
+
+function getAiStatus(settings) {
+  const s = settings ?? defaultSettings();
+  if (location.protocol === "file:" && s.mode !== "direct") {
+    return {
+      level: "warn",
+      text: "当前是双击 HTML 打开的 file:// 页面：AI 代理不会工作。请双击 start.bat，再用自动打开的 http://127.0.0.1:5173/ 使用 AI。",
+    };
+  }
+  if (!String(s.apiKey ?? "").trim()) {
+    return { level: "muted", text: "未填写 API Key：会使用本地规则生成，不是 AI。填入 Key 并保存后启用 AI。" };
+  }
+  if (!String(s.baseUrl ?? "").trim()) {
+    return { level: "warn", text: "已填写 API Key，但缺少 Base URL：当前仍会使用本地规则，不是 AI。" };
+  }
+  if (s.mode === "direct") {
+    return { level: "warn", text: "Direct 直连可能被浏览器 CORS 拦截，也会把 Key 暴露在前端；推荐改用本地代理 Proxy。" };
+  }
+  return { level: "ok", text: "AI 已配置为本地代理模式。若生成时提示失败，请确认 start.bat 窗口仍在运行。" };
+}
+
 function setSettingsHint(text) {
   if (!els.settingsHint) return;
   els.settingsHint.textContent = text;
@@ -237,20 +289,20 @@ function setSettingsHint(text) {
 function buildModeHint(mode) {
   const m = String(mode ?? "proxy") === "direct" ? "direct" : "proxy";
   if (m === "direct") return "Direct may hit CORS. / 直连可能被 CORS 拦住。";
-  if (location.protocol === "file:") return "Proxy needs a local server + http URL. / 代理模式需要本地服务并用 http 打开。";
+  if (location.protocol === "file:") return "Proxy needs start.bat + http URL. / 代理模式需要双击 start.bat 并用 http 打开。";
   return "Proxy needs a local server. / 代理模式需要本地服务。";
 }
 
 function buildAiFailureMessage(err, settings) {
   const s = settings ?? defaultSettings();
   if (s.mode !== "direct" && location.protocol === "file:") {
-    return "Proxy needs a local server. Run: node adhd-demo/local-proxy.mjs then open http://localhost:5173/ 代理模式需要本地服务：运行 node adhd-demo/local-proxy.mjs 并用 http://localhost:5173/ 打开。";
+    return "Proxy needs the local launcher. Double-click start.bat, then use http://127.0.0.1:5173/ 代理模式需要本地启动器：双击 start.bat，再用 http://127.0.0.1:5173/ 打开。";
   }
   const raw = String(err?.message ?? err ?? "").trim();
   if (!raw) return "AI failed, using local rules. / AI 失败，先用本地拆解。";
   if (/failed to fetch/i.test(raw) || /networkerror/i.test(raw)) {
     if (s.mode === "direct") return "AI failed: request blocked (CORS/network). / AI 失败：可能被 CORS/网络拦截。";
-    return "AI failed: proxy not running or network blocked. / AI 失败：本地代理未启动或网络被拦截。";
+    return "AI failed: proxy not running or network blocked. Keep the start.bat window open. / AI 失败：本地代理未启动或网络被拦截，请保持 start.bat 窗口运行。";
   }
   return `AI failed, using local rules. / AI 失败，先用本地拆解。 ${raw.slice(0, 180)}`;
 }

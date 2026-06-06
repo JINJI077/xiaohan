@@ -269,6 +269,33 @@ body {
   margin-top: 12px;
 }
 
+.ai-status {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(31, 36, 48, 0.1);
+  background: rgba(255, 255, 255, 0.68);
+  color: rgba(31, 36, 48, 0.68);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ai-status-ok {
+  border-color: rgba(25, 195, 125, 0.26);
+  background: rgba(25, 195, 125, 0.08);
+  color: rgba(16, 112, 72, 0.95);
+}
+
+.ai-status-warn {
+  border-color: rgba(255, 190, 46, 0.38);
+  background: rgba(255, 190, 46, 0.12);
+  color: rgba(120, 78, 0, 0.95);
+}
+
+.ai-status-muted {
+  color: rgba(31, 36, 48, 0.58);
+}
+
 .settings {
   margin-top: 12px;
   border-radius: 16px;
@@ -771,4 +798,3 @@ body {
     display: none;
   }
 }
-
