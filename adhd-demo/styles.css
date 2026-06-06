@@ -20,19 +20,34 @@
 
 html,
 body {
-  height: 100%;
+  min-height: 100%;
   -webkit-text-size-adjust: 100%;
+}
+
+html {
+  background: var(--bg);
 }
 
 body {
   margin: 0;
   color: var(--text);
-  background: radial-gradient(1200px 700px at 18% 12%, rgba(255, 79, 179, 0.18), transparent),
-    radial-gradient(1000px 700px at 80% 22%, rgba(67, 164, 255, 0.14), transparent),
-    radial-gradient(900px 600px at 62% 88%, rgba(25, 195, 125, 0.12), transparent), var(--bg);
+  background: transparent;
+  position: relative;
   font-family: "Times New Roman", Times, SimSun, "Songti SC", "Noto Serif CJK SC", serif;
   font-weight: 700;
   -webkit-tap-highlight-color: transparent;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(1200px 700px at 18% 12%, rgba(255, 79, 179, 0.16), transparent),
+    radial-gradient(1000px 700px at 80% 22%, rgba(67, 164, 255, 0.13), transparent),
+    radial-gradient(900px 600px at 62% 88%, rgba(25, 195, 125, 0.11), transparent),
+    linear-gradient(180deg, #fff7fb 0%, #fff1f8 45%, #f6d6ea 100%);
 }
 
 button,
@@ -44,7 +59,7 @@ select {
 }
 
 .app {
-  min-height: 100%;
+  min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 26px 18px;
