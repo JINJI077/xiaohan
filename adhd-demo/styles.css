@@ -30,9 +30,17 @@ body {
   background: radial-gradient(1200px 700px at 18% 12%, rgba(255, 79, 179, 0.18), transparent),
     radial-gradient(1000px 700px at 80% 22%, rgba(67, 164, 255, 0.14), transparent),
     radial-gradient(900px 600px at 62% 88%, rgba(25, 195, 125, 0.12), transparent), var(--bg);
-  font-family: ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
-    "Apple Color Emoji", "Segoe UI Emoji";
+  font-family: "Times New Roman", Times, SimSun, "Songti SC", "Noto Serif CJK SC", serif;
+  font-weight: 700;
   -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-weight: inherit;
 }
 
 .app {
@@ -269,33 +277,6 @@ body {
   margin-top: 12px;
 }
 
-.ai-status {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(31, 36, 48, 0.1);
-  background: rgba(255, 255, 255, 0.68);
-  color: rgba(31, 36, 48, 0.68);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.ai-status-ok {
-  border-color: rgba(25, 195, 125, 0.26);
-  background: rgba(25, 195, 125, 0.08);
-  color: rgba(16, 112, 72, 0.95);
-}
-
-.ai-status-warn {
-  border-color: rgba(255, 190, 46, 0.38);
-  background: rgba(255, 190, 46, 0.12);
-  color: rgba(120, 78, 0, 0.95);
-}
-
-.ai-status-muted {
-  color: rgba(31, 36, 48, 0.58);
-}
-
 .settings {
   margin-top: 12px;
   border-radius: 16px;
@@ -442,7 +423,7 @@ body {
 
 .step {
   display: grid;
-  grid-template-columns: 52px 1fr auto;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
   align-items: start;
   gap: 10px;
   padding: 10px;
@@ -463,6 +444,7 @@ body {
   display: grid;
   gap: 6px;
   cursor: pointer;
+  min-width: 0;
 }
 
 .step-check {
@@ -508,10 +490,18 @@ body {
   border: none;
   background: transparent;
   font-size: 14px;
+  line-height: 1.35;
   outline: none;
   padding: 6px 6px;
   border-radius: 12px;
   cursor: text;
+  min-height: 38px;
+  min-width: 0;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .step-text:focus {
@@ -531,6 +521,8 @@ body {
   line-height: 1.35;
   display: grid;
   gap: 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .step-meta {
@@ -735,12 +727,18 @@ body {
   .field-select,
   .field-textarea,
   .step-text {
-    font-size: 16px;
+    font-size: 15px;
+  }
+  .step-sub {
+    font-size: 11px;
   }
   .step {
-    grid-template-columns: 48px 1fr auto;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
     gap: 8px;
     padding: 10px 10px;
+  }
+  .step-main {
+    min-width: 0;
   }
   .step-check {
     width: 48px;
@@ -752,18 +750,53 @@ body {
     height: 38px;
     border-radius: 13px;
   }
-  .step-progress,
-  .step-progress-bar {
-    width: 92px;
+  .step-meta {
+    width: 38px;
+    align-items: center;
+  }
+  .step-progress {
+    display: none;
+  }
+  .substeps {
+    margin-left: 8px;
+    padding-left: 8px;
+  }
+  .step.is-child {
+    grid-template-columns: 42px minmax(0, 1fr) 34px;
+    gap: 6px;
+    padding: 9px 8px;
+  }
+  .step.is-child .step-check {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+  }
+  .step.is-child .step-check .tick {
+    width: 24px;
+    height: 24px;
+  }
+  .step.is-child .step-meta {
+    width: 34px;
+    gap: 6px;
+  }
+  .step.is-child .mini-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+  }
+  .step.is-child .step-chevron {
+    width: 22px;
+    height: 22px;
+    border-radius: 9px;
   }
   .toast {
     bottom: calc(22px + env(safe-area-inset-bottom));
   }
   .footer-desktop {
-    display: none;
+    display: inline;
   }
   .footer-mobile {
-    display: inline;
+    display: none;
   }
 }
 

@@ -13,7 +13,6 @@ const els = {
   apiKey: document.getElementById("apiKey"),
   apiModel: document.getElementById("apiModel"),
   aiNotes: document.getElementById("aiNotes"),
-  aiStatus: document.getElementById("aiStatus"),
   settingsHint: document.getElementById("settingsHint"),
   toast: document.querySelector(".toast"),
   confetti: document.getElementById("confetti"),
@@ -31,7 +30,6 @@ function boot() {
   render();
   wire();
   registerServiceWorker();
-  refreshAiStatus();
   maybeGenerateAiNotes();
   if (!state.steps || state.steps.length === 0) setBubble(pickMessage("idle"));
 }
@@ -60,14 +58,7 @@ function wire() {
     els.apiMode.addEventListener("change", () => {
       const v = String(els.apiMode.value || "proxy");
       setSettingsHint(buildModeHint(v));
-      refreshAiStatus();
     });
-  }
-
-  for (const el of [els.apiBaseUrl, els.apiKey, els.apiModel, els.aiNotes]) {
-    if (!el) continue;
-    el.addEventListener("input", refreshAiStatus);
-    el.addEventListener("change", refreshAiStatus);
   }
 
   els.taskInput.addEventListener("keydown", (e) => {
@@ -105,6 +96,7 @@ function wire() {
   els.steps.addEventListener("input", (e) => {
     const input = e.target.closest('[data-step-action="edit"]');
     if (!input) return;
+    autoResizeTextarea(input);
     const id = input.dataset.stepId;
     const next = String(input.value ?? "");
     updateStepText(id, next);
@@ -227,7 +219,6 @@ function onSaveSettings() {
   state.settings = next;
   saveState();
   setSettingsHint("Saved. / 已保存。");
-  refreshAiStatus();
   toast("Saved ✅ / 已保存");
   maybeGenerateAiNotes();
 }
@@ -241,44 +232,6 @@ function hydrateSettingsUI() {
   if (els.apiModel) els.apiModel.value = s.model;
   if (els.aiNotes) els.aiNotes.checked = Boolean(s.aiNotes);
   setSettingsHint(buildModeHint(s.mode));
-}
-
-function refreshAiStatus() {
-  if (!els.aiStatus) return;
-  const s = readSettingsFromUI();
-  const { text, level } = getAiStatus(s);
-  els.aiStatus.textContent = text;
-  els.aiStatus.className = `ai-status ai-status-${level}`;
-}
-
-function readSettingsFromUI() {
-  return {
-    mode: String(els.apiMode?.value ?? state.settings?.mode ?? "proxy") === "direct" ? "direct" : "proxy",
-    baseUrl: String(els.apiBaseUrl?.value ?? state.settings?.baseUrl ?? "").trim(),
-    apiKey: String(els.apiKey?.value ?? state.settings?.apiKey ?? "").trim(),
-    model: String(els.apiModel?.value ?? state.settings?.model ?? "deepseek-chat").trim() || "deepseek-chat",
-    aiNotes: Boolean(els.aiNotes?.checked ?? state.settings?.aiNotes),
-  };
-}
-
-function getAiStatus(settings) {
-  const s = settings ?? defaultSettings();
-  if (location.protocol === "file:" && s.mode !== "direct") {
-    return {
-      level: "warn",
-      text: "当前是双击 HTML 打开的 file:// 页面：AI 代理不会工作。请双击 start.bat，再用自动打开的 http://127.0.0.1:5173/ 使用 AI。",
-    };
-  }
-  if (!String(s.apiKey ?? "").trim()) {
-    return { level: "muted", text: "未填写 API Key：会使用本地规则生成，不是 AI。填入 Key 并保存后启用 AI。" };
-  }
-  if (!String(s.baseUrl ?? "").trim()) {
-    return { level: "warn", text: "已填写 API Key，但缺少 Base URL：当前仍会使用本地规则，不是 AI。" };
-  }
-  if (s.mode === "direct") {
-    return { level: "warn", text: "Direct 直连可能被浏览器 CORS 拦截，也会把 Key 暴露在前端；推荐改用本地代理 Proxy。" };
-  }
-  return { level: "ok", text: "AI 已配置为本地代理模式。若生成时提示失败，请确认 start.bat 窗口仍在运行。" };
 }
 
 function setSettingsHint(text) {
@@ -467,9 +420,9 @@ function deleteStep(id) {
 function updateStepText(id, text) {
   const hit = findStepWithParents(state.steps ?? [], id);
   if (!hit) return;
-  hit.step.text = decorateStepText(text, state.taskText);
+  const normalized = String(text ?? "").replace(/\r?\n+/g, " ").trim();
+  hit.step.text = decorateStepText(normalized, state.taskText);
   saveState();
-  render({ silent: true });
 }
 
 function toggleExpandStep(id) {
@@ -558,9 +511,10 @@ function renderSteps(steps, container, depth) {
     tick.textContent = "✓";
     check.appendChild(tick);
 
-    const input = document.createElement("input");
+    const input = document.createElement("textarea");
     input.className = "step-text";
-    input.type = "text";
+    input.rows = 1;
+    input.wrap = "soft";
     input.placeholder = "写一个更小的动作 / one tiny action";
     input.value = String(step.text ?? "");
     input.dataset.stepAction = "edit";
@@ -641,12 +595,26 @@ function renderSteps(steps, container, depth) {
   }
 }
 
+function autoResizeTextarea(el) {
+  if (!el || String(el.tagName || "").toLowerCase() !== "textarea") return;
+  el.style.height = "auto";
+  const next = Math.max(Number(el.scrollHeight || 0), 38);
+  if (next > 0) el.style.height = `${next}px`;
+}
+
+function autoResizeStepTextareas() {
+  window.requestAnimationFrame(() => {
+    els.steps.querySelectorAll("textarea.step-text").forEach(autoResizeTextarea);
+  });
+}
+
 function render(opts = {}) {
   const { silent = false, focusId } = opts;
   const steps = Array.isArray(state.steps) ? state.steps : [];
 
   els.steps.innerHTML = "";
   renderSteps(steps, els.steps, 0);
+  autoResizeStepTextareas();
 
   const { doneCount, total, pct } = getProgress(steps);
   els.progressText.textContent = `${doneCount} / ${total}`;
@@ -823,6 +791,7 @@ function normalizeNoteLines(notes) {
 function describeStepLines(stepText, taskText) {
   const base = stripEmoji(stepText);
   const t = `${taskText ?? ""} ${base}`;
+  if (/(被子|床边|脚|地上|坐稳|掀开)/u.test(base)) return ["只做这一小步。", "做到就停一下。"];
   if (/(喷壶|水壶|装水|水龙头)/u.test(t)) return ["目标很小：把东西拿到手里。", "拿到就停一下，别急着连做。", "卡住的话：先移动到水龙头旁。"];
   if (/(走到|走去|走)/u.test(base)) return ["走到就算赢。", "到了以后只做下一小步。", "不需要快，只要移动。"];
   if (/(坐起来|起身|站起来)/u.test(base)) return ["这是“启动动作”，不需要有动力。", "身体一动，下一步会更容易。"];
@@ -940,6 +909,7 @@ function generateSubStepsLocal(stepText, taskText) {
   const base = String(stepText ?? "").trim();
   if (!base) return [];
   const t = `${taskText ?? ""} ${base}`;
+  if (/(床上|起床)/u.test(t) && /(坐起来|起身|起床)/u.test(t)) return ["把被子掀开一点", "把脚放到地上", "用手撑一下，从床上坐起来", "在床边坐稳 3 秒"];
   if (/(喷壶|水壶)/u.test(t)) return ["找到喷壶/水壶放在哪里", "走过去", "把喷壶/水壶拿到手里", "放到一个顺手的位置"];
   if (/(装水|接水|水龙头)/u.test(t)) return ["走到水龙头旁", "打开水龙头", "把喷壶/水壶装到够用", "关掉水龙头"];
   if (/(走到|走去|去到|出发)/u.test(base)) return ["站起来", "走到门口/过道", "走到目的地", "停一下，确认下一步"];
