@@ -1,8 +1,19 @@
 # xiaohan
 
-## 番茄钟 Demo
+## adhd-demo（事项启动器 + 可选 AI）
 
-打开 [pomodoro-demo/index.html](file:///d:/xiaohan/github_try/xiaohan/pomodoro-demo/index.html) 即可运行（纯静态 HTML/CSS/JS，无需安装依赖）。
+- 纯前端本地拆解：直接双击 [adhd-demo/index.html](adhd-demo/index.html)
+- 启用 AI（推荐 Proxy，本地代理转发，避免 CORS）：
+  - 安装 Node.js 18+
+  - 运行：`node adhd-demo/local-proxy.mjs`
+  - 浏览器打开输出的 `http://127.0.0.1:5173/`
+  - 在页面的 API 设置里填入 API Key（Base URL 默认是 DeepSeek/OpenAI 兼容地址，可按需修改）
+
+更多细节见：[adhd-demo/README.md](adhd-demo/README.md)
+
+## pomodoro-demo（番茄钟）
+
+打开 [pomodoro-demo/index.html](pomodoro-demo/index.html) 即可运行（纯静态 HTML/CSS/JS，无需安装依赖）。
 
 快捷键：
 

@@ -10,6 +10,11 @@ const port = Number.parseInt(process.env.PORT || "5173", 10);
 const defaultBaseUrl = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 const defaultApiKey = process.env.DEEPSEEK_API_KEY || "";
 
+if (typeof globalThis.fetch !== "function") {
+  process.stderr.write("This server requires Node.js 18+ (global fetch). Please upgrade Node and retry.\n");
+  process.exit(1);
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
@@ -74,6 +79,8 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, "127.0.0.1", () => {
   process.stdout.write(`http://127.0.0.1:${port}/\n`);
+  process.stdout.write(`Proxy API: POST http://127.0.0.1:${port}/api/llm/chat\n`);
+  process.stdout.write(`Change port: set PORT=3000 (Windows) or PORT=3000 node local-proxy.mjs\n`);
 });
 
 function resolveStaticPath(p) {
@@ -129,4 +136,3 @@ function resolveChatCompletionsUrl(baseUrl) {
   if (/\/v1$/i.test(u)) return `${u}/chat/completions`;
   return `${u}/v1/chat/completions`;
 }
-

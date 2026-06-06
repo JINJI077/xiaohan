@@ -57,7 +57,7 @@ function wire() {
   if (els.apiMode) {
     els.apiMode.addEventListener("change", () => {
       const v = String(els.apiMode.value || "proxy");
-      setSettingsHint(v === "proxy" ? "Proxy needs a local server. / 代理模式需要本地服务。" : "Direct may hit CORS. / 直连可能被 CORS 拦住。");
+      setSettingsHint(buildModeHint(v));
     });
   }
 
@@ -120,13 +120,28 @@ function onGenerate() {
   }
 
   state.taskText = text;
-  const tryAi = shouldUseAi(state.settings);
-  if (!tryAi) return generateWithLocal(text);
+  const s = state.settings ?? defaultSettings();
+  state.settings = s;
+  const tryAi = shouldUseAi(s);
+  if (!tryAi) return generateWithLocal(text, { reason: "not_configured" });
+  if (s.mode !== "direct" && location.protocol === "file:") {
+    return generateWithLocal(text, {
+      aiFailed: true,
+      reason: "proxy_requires_http",
+      errorMessage: "Proxy needs a local server. Run: node adhd-demo/local-proxy.mjs then open http://127.0.0.1:5173/ 代理模式需要本地服务：运行 node adhd-demo/local-proxy.mjs 并用 http://127.0.0.1:5173/ 打开。",
+    });
+  }
 
   setBubble("Asking AI… / 正在问 AI…");
   generateAtomicSteps(text, { mode: "deepseek" })
     .then((stepsText) => setStepsFromTexts(stepsText, { source: "ai" }))
-    .catch(() => generateWithLocal(text, { aiFailed: true }));
+    .catch((err) =>
+      generateWithLocal(text, {
+        aiFailed: true,
+        reason: "ai_failed",
+        errorMessage: buildAiFailureMessage(err, s),
+      }),
+    );
 }
 
 function onExample() {
@@ -143,9 +158,16 @@ function onReset() {
   setBubble(pickMessage("idle"));
 }
 
-function generateWithLocal(text, { aiFailed } = {}) {
-  if (aiFailed) toast("AI failed, using local rules. / AI 失败，先用本地拆解。");
-  setBubble(pickMessage("start"));
+function generateWithLocal(text, { aiFailed, reason, errorMessage } = {}) {
+  if (aiFailed) {
+    toast(String(errorMessage || "AI failed, using local rules. / AI 失败，先用本地拆解。"));
+    setBubble("Local rules (not AI). / 本地规则（不是 AI）。");
+  } else {
+    if (reason === "not_configured" && String(state.settings?.apiKey ?? "").trim()) {
+      toast("AI not enabled: missing Base URL. / 未启用 AI：缺少 Base URL。");
+    }
+    setBubble("Local rules. / 本地规则。");
+  }
   generateAtomicSteps(text, { mode: "local" })
     .then((stepsText) => setStepsFromTexts(stepsText, { source: "local" }))
     .catch((err) => {
@@ -204,12 +226,33 @@ function hydrateSettingsUI() {
   if (els.apiKey) els.apiKey.value = s.apiKey;
   if (els.apiModel) els.apiModel.value = s.model;
   if (els.aiNotes) els.aiNotes.checked = Boolean(s.aiNotes);
-  setSettingsHint(s.mode === "proxy" ? "Proxy needs a local server. / 代理模式需要本地服务。" : "Direct may hit CORS. / 直连可能被 CORS 拦住。");
+  setSettingsHint(buildModeHint(s.mode));
 }
 
 function setSettingsHint(text) {
   if (!els.settingsHint) return;
   els.settingsHint.textContent = text;
+}
+
+function buildModeHint(mode) {
+  const m = String(mode ?? "proxy") === "direct" ? "direct" : "proxy";
+  if (m === "direct") return "Direct may hit CORS. / 直连可能被 CORS 拦住。";
+  if (location.protocol === "file:") return "Proxy needs a local server + http URL. / 代理模式需要本地服务并用 http 打开。";
+  return "Proxy needs a local server. / 代理模式需要本地服务。";
+}
+
+function buildAiFailureMessage(err, settings) {
+  const s = settings ?? defaultSettings();
+  if (s.mode !== "direct" && location.protocol === "file:") {
+    return "Proxy needs a local server. Run: node adhd-demo/local-proxy.mjs then open http://127.0.0.1:5173/ 代理模式需要本地服务：运行 node adhd-demo/local-proxy.mjs 并用 http://127.0.0.1:5173/ 打开。";
+  }
+  const raw = String(err?.message ?? err ?? "").trim();
+  if (!raw) return "AI failed, using local rules. / AI 失败，先用本地拆解。";
+  if (/failed to fetch/i.test(raw) || /networkerror/i.test(raw)) {
+    if (s.mode === "direct") return "AI failed: request blocked (CORS/network). / AI 失败：可能被 CORS/网络拦截。";
+    return "AI failed: proxy not running or network blocked. / AI 失败：本地代理未启动或网络被拦截。";
+  }
+  return `AI failed, using local rules. / AI 失败，先用本地拆解。 ${raw.slice(0, 180)}`;
 }
 
 function makeStep({ id, text, done, notes, children, expanded, generating } = {}) {
