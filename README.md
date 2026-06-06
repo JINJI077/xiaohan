@@ -6,7 +6,7 @@
 - 启用 AI（推荐 Proxy，本地代理转发，避免 CORS）：
   - 安装 Node.js 18+
   - 运行：`node adhd-demo/local-proxy.mjs`
-  - 浏览器打开输出的 `http://127.0.0.1:5173/`
+  - 浏览器打开输出的 `http://localhost:5173/`（如 localhost 解析异常，可改用 `http://127.0.0.1:5173/`）
   - 在页面的 API 设置里填入 API Key（Base URL 默认是 DeepSeek/OpenAI 兼容地址，可按需修改）
 
 更多细节见：[adhd-demo/README.md](adhd-demo/README.md)

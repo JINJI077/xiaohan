@@ -77,9 +77,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(port, "127.0.0.1", () => {
-  process.stdout.write(`http://127.0.0.1:${port}/\n`);
-  process.stdout.write(`Proxy API: POST http://127.0.0.1:${port}/api/llm/chat\n`);
+server.listen(port, () => {
+  process.stdout.write(`http://localhost:${port}/\n`);
+  process.stdout.write(`Proxy API: POST http://localhost:${port}/api/llm/chat\n`);
   process.stdout.write(`Change port: set PORT=3000 (Windows) or PORT=3000 node local-proxy.mjs\n`);
 });
 

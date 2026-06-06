@@ -27,7 +27,7 @@ node adhd-demo/local-proxy.mjs
 
 启动成功会输出类似：
 
-- `http://127.0.0.1:5173/`
+- `http://localhost:5173/`（如 localhost 解析异常，可改用 `http://127.0.0.1:5173/`）
 
 用浏览器打开这个地址（不要再双击 index.html）。
 
@@ -55,4 +55,3 @@ node adhd-demo/local-proxy.mjs
 
 - 报 `fetch is not defined` / 类似错误：升级到 Node.js 18+
 - 端口被占用：设置 `PORT` 环境变量换端口（例如 Windows：`set PORT=3000` 后再启动）
-

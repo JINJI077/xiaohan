@@ -128,7 +128,7 @@ function onGenerate() {
     return generateWithLocal(text, {
       aiFailed: true,
       reason: "proxy_requires_http",
-      errorMessage: "Proxy needs a local server. Run: node adhd-demo/local-proxy.mjs then open http://127.0.0.1:5173/ 代理模式需要本地服务：运行 node adhd-demo/local-proxy.mjs 并用 http://127.0.0.1:5173/ 打开。",
+      errorMessage: "Proxy needs a local server. Run: node adhd-demo/local-proxy.mjs then open http://localhost:5173/ 代理模式需要本地服务：运行 node adhd-demo/local-proxy.mjs 并用 http://localhost:5173/ 打开。",
     });
   }
 
@@ -244,7 +244,7 @@ function buildModeHint(mode) {
 function buildAiFailureMessage(err, settings) {
   const s = settings ?? defaultSettings();
   if (s.mode !== "direct" && location.protocol === "file:") {
-    return "Proxy needs a local server. Run: node adhd-demo/local-proxy.mjs then open http://127.0.0.1:5173/ 代理模式需要本地服务：运行 node adhd-demo/local-proxy.mjs 并用 http://127.0.0.1:5173/ 打开。";
+    return "Proxy needs a local server. Run: node adhd-demo/local-proxy.mjs then open http://localhost:5173/ 代理模式需要本地服务：运行 node adhd-demo/local-proxy.mjs 并用 http://localhost:5173/ 打开。";
   }
   const raw = String(err?.message ?? err ?? "").trim();
   if (!raw) return "AI failed, using local rules. / AI 失败，先用本地拆解。";
