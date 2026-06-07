@@ -8,6 +8,13 @@ const els = {
   meterBar: document.getElementById("meterBar"),
   progressText: document.getElementById("progressText"),
   progressPct: document.getElementById("progressPct"),
+  viewStart: document.getElementById("viewStart"),
+  viewSummary: document.getElementById("viewSummary"),
+  viewSwitch: document.getElementById("viewSwitch"),
+  viewIndicator: document.getElementById("viewIndicator"),
+  summaryCount: document.getElementById("summaryCount"),
+  summaryEmpty: document.getElementById("summaryEmpty"),
+  summaryTimeline: document.getElementById("summaryTimeline"),
   apiMode: document.getElementById("apiMode"),
   apiBaseUrl: document.getElementById("apiBaseUrl"),
   apiKey: document.getElementById("apiKey"),
@@ -21,12 +28,18 @@ const els = {
 let state = loadState();
 let toastTimer = null;
 let notesSeq = 0;
+let currentView = "start";
+let viewTabs = [];
 
 boot();
 
 function boot() {
   els.taskInput.value = state.taskText ?? "";
   hydrateSettingsUI();
+  initViewSwitch();
+  applyView();
+  syncViewSwitch({ immediate: true });
+  renderSummary();
   render();
   wire();
   registerServiceWorker();
@@ -49,6 +62,8 @@ function wire() {
     if (action === "generate") onGenerate();
     if (action === "example") onExample();
     if (action === "reset") onReset();
+    if (action === "view-start") setView("start");
+    if (action === "view-summary") setView("summary");
     if (action === "add-step") onAddStep();
     if (action === "clear-done") onClearDone();
     if (action === "save-settings") onSaveSettings();
@@ -112,6 +127,205 @@ function wire() {
   });
 }
 
+function initViewSwitch() {
+  if (!els.viewSwitch || !els.viewIndicator) return;
+  viewTabs = Array.from(els.viewSwitch.querySelectorAll(".view-switch-tab"));
+  if (viewTabs.length === 0) return;
+
+  for (const tab of viewTabs) {
+    tab.addEventListener("pointerenter", () => tab.classList.add("is-hover"));
+    tab.addEventListener("pointerleave", () => tab.classList.remove("is-hover"));
+    tab.addEventListener("focus", () => tab.classList.add("is-hover"));
+    tab.addEventListener("blur", () => tab.classList.remove("is-hover"));
+  }
+
+  window.addEventListener("resize", () => syncViewSwitch({ immediate: true }));
+  window.addEventListener("load", () => syncViewSwitch({ immediate: true }));
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(() => syncViewSwitch({ immediate: true })).catch(() => {});
+  }
+
+  syncViewSwitch({ immediate: true });
+}
+
+function setView(next) {
+  const v = next === "summary" ? "summary" : "start";
+  if (currentView === v) return;
+  currentView = v;
+  applyView();
+  syncViewSwitch();
+  if (currentView === "summary") renderSummary();
+}
+
+function applyView() {
+  if (els.viewStart) els.viewStart.hidden = currentView !== "start";
+  if (els.viewSummary) els.viewSummary.hidden = currentView !== "summary";
+}
+
+function syncViewSwitch({ immediate } = {}) {
+  if (!els.viewSwitch || !els.viewIndicator || viewTabs.length === 0) return;
+  for (const tab of viewTabs) {
+    const isActive = String(tab.dataset.view || "") === currentView;
+    if (isActive) tab.setAttribute("aria-current", "page");
+    else tab.removeAttribute("aria-current");
+  }
+
+  const activeTab = viewTabs.find((t) => String(t.dataset.view || "") === currentView);
+  if (!activeTab) return;
+  positionViewIndicator(activeTab, { immediate: Boolean(immediate) });
+}
+
+function positionViewIndicator(tab, { immediate } = {}) {
+  if (!els.viewSwitch || !els.viewIndicator) return;
+  const switchRect = els.viewSwitch.getBoundingClientRect();
+  const tabRect = tab.getBoundingClientRect();
+
+  const x = Math.round(tabRect.left - switchRect.left);
+  const w = Math.round(tabRect.width);
+  if (!Number.isFinite(x) || !Number.isFinite(w) || w <= 0) return;
+
+  const prevTransition = els.viewIndicator.style.transition;
+  if (immediate) els.viewIndicator.style.transition = "none";
+  els.viewIndicator.style.transform = `translateX(${x}px)`;
+  els.viewIndicator.style.width = `${w}px`;
+  if (immediate) {
+    els.viewIndicator.getBoundingClientRect();
+    els.viewIndicator.style.transition = prevTransition;
+  }
+}
+
+function recordCompletionIfNeeded() {
+  const history = Array.isArray(state.history) ? state.history : [];
+  state.history = history;
+
+  const runId = typeof state.runId === "string" && state.runId ? state.runId : makeId();
+  state.runId = runId;
+  if (state.runCompleted) return false;
+
+  const taskText = String(state.taskText ?? "").trim() || String(els.taskInput?.value ?? "").trim();
+  const { total } = getProgress(state.steps);
+  if (!taskText || total <= 0) return false;
+
+  const entry = {
+    id: makeId(),
+    runId,
+    taskText,
+    totalSteps: total,
+    completedAt: new Date().toISOString(),
+  };
+
+  const next = [entry, ...history].slice(0, 200);
+  state.history = next;
+  state.runCompleted = true;
+  saveState();
+  renderSummary();
+  return true;
+}
+
+function renderSummary() {
+  if (!els.summaryCount || !els.summaryTimeline || !els.summaryEmpty) return;
+  const history = Array.isArray(state.history) ? state.history : [];
+  els.summaryCount.textContent = String(history.length);
+  els.summaryTimeline.innerHTML = "";
+
+  if (history.length === 0) {
+    els.summaryEmpty.hidden = false;
+    return;
+  }
+  els.summaryEmpty.hidden = true;
+
+  const sorted = history
+    .slice()
+    .sort((a, b) => (Date.parse(String(b?.completedAt ?? "")) || 0) - (Date.parse(String(a?.completedAt ?? "")) || 0));
+
+  const groups = new Map();
+  for (const item of sorted) {
+    const d = new Date(String(item?.completedAt ?? ""));
+    if (Number.isNaN(d.getTime())) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ ...item, _date: d });
+  }
+
+  for (const [, items] of groups) {
+    if (!Array.isArray(items) || items.length === 0) continue;
+    const day = items[0]._date;
+
+    const groupEl = document.createElement("section");
+    groupEl.className = "day-group";
+
+    const stamp = document.createElement("div");
+    stamp.className = "date-stamp";
+
+    const yearEl = document.createElement("div");
+    yearEl.className = "date-stamp-year";
+    const yearNum = document.createElement("span");
+    yearNum.className = "date-stamp-num";
+    yearNum.textContent = String(day.getFullYear());
+    const yearUnit = document.createElement("span");
+    yearUnit.className = "date-stamp-unit";
+    yearUnit.textContent = "年";
+    yearEl.appendChild(yearNum);
+    yearEl.appendChild(yearUnit);
+
+    const md = document.createElement("div");
+    md.className = "date-stamp-md";
+
+    const monthEl = document.createElement("div");
+    monthEl.className = "date-stamp-month";
+    const monthNum = document.createElement("span");
+    monthNum.className = "date-stamp-num";
+    monthNum.textContent = String(day.getMonth() + 1).padStart(2, "0");
+    const monthUnit = document.createElement("span");
+    monthUnit.className = "date-stamp-unit";
+    monthUnit.textContent = "月";
+    monthEl.appendChild(monthNum);
+    monthEl.appendChild(monthUnit);
+
+    const dayEl = document.createElement("div");
+    dayEl.className = "date-stamp-day";
+    const dayNum = document.createElement("span");
+    dayNum.className = "date-stamp-num";
+    dayNum.textContent = String(day.getDate()).padStart(2, "0");
+    const dayUnit = document.createElement("span");
+    dayUnit.className = "date-stamp-unit";
+    dayUnit.textContent = "日";
+    dayEl.appendChild(dayNum);
+    dayEl.appendChild(dayUnit);
+
+    md.appendChild(monthEl);
+    md.appendChild(dayEl);
+    stamp.appendChild(yearEl);
+    stamp.appendChild(md);
+
+    const grid = document.createElement("div");
+    grid.className = "event-grid";
+
+    for (const entry of items) {
+      const card = document.createElement("article");
+      card.className = "event-card";
+
+      const time = document.createElement("div");
+      time.className = "event-time";
+      const hh = String(entry._date.getHours()).padStart(2, "0");
+      const mm = String(entry._date.getMinutes()).padStart(2, "0");
+      time.textContent = `${hh}:${mm}`;
+
+      const title = document.createElement("p");
+      title.className = "event-title";
+      title.textContent = String(entry.taskText ?? "");
+
+      card.appendChild(time);
+      card.appendChild(title);
+      grid.appendChild(card);
+    }
+
+    groupEl.appendChild(stamp);
+    groupEl.appendChild(grid);
+    els.summaryTimeline.appendChild(groupEl);
+  }
+}
+
 function onGenerate() {
   const text = String(els.taskInput.value ?? "").trim();
   if (!text) {
@@ -151,7 +365,14 @@ function onExample() {
 }
 
 function onReset() {
-  state = { taskText: "", steps: [], settings: state.settings ?? defaultSettings() };
+  state = {
+    ...state,
+    taskText: "",
+    steps: [],
+    runId: makeId(),
+    runCompleted: false,
+    settings: state.settings ?? defaultSettings(),
+  };
   saveState();
   els.taskInput.value = "";
   render();
@@ -196,6 +417,8 @@ function setStepsFromTexts(stepsText, { source } = {}) {
       generating: false,
     }),
   );
+  state.runId = makeId();
+  state.runCompleted = false;
   saveState();
   render();
   if (source === "ai") {
@@ -394,6 +617,7 @@ function toggleStep(id) {
   if (total > 0 && doneCount === total) {
     toast(pickMessage("done_all"));
     setBubble(pickMessage("done_all"));
+    recordCompletionIfNeeded();
     launchConfetti();
     return;
   }
@@ -1048,10 +1272,29 @@ function serializeSteps(steps, depth = 0) {
   }));
 }
 
+function normalizeLoadedHistory(rawHistory) {
+  const arr = Array.isArray(rawHistory) ? rawHistory : [];
+  const out = [];
+  for (const raw of arr.slice(0, 200)) {
+    const taskText = typeof raw?.taskText === "string" ? raw.taskText : "";
+    const completedAt = typeof raw?.completedAt === "string" ? raw.completedAt : "";
+    const d = new Date(completedAt);
+    if (!taskText.trim() || Number.isNaN(d.getTime())) continue;
+    out.push({
+      id: typeof raw?.id === "string" && raw.id ? raw.id : makeId(),
+      runId: typeof raw?.runId === "string" ? raw.runId : "",
+      taskText,
+      totalSteps: Number.isFinite(raw?.totalSteps) ? raw.totalSteps : undefined,
+      completedAt: d.toISOString(),
+    });
+  }
+  return out;
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { taskText: "", steps: [], settings: defaultSettings() };
+    if (!raw) return { taskText: "", steps: [], settings: defaultSettings(), history: [], runId: makeId(), runCompleted: false };
     const parsed = JSON.parse(raw);
     const taskText = typeof parsed.taskText === "string" ? parsed.taskText : "";
     const rawSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
@@ -1064,9 +1307,12 @@ function loadState() {
       model: typeof settingsRaw.model === "string" ? settingsRaw.model : defaultSettings().model,
       aiNotes: Boolean(settingsRaw.aiNotes ?? defaultSettings().aiNotes),
     };
-    return { taskText, steps: normalized, settings };
+    const history = normalizeLoadedHistory(parsed?.history);
+    const runId = typeof parsed?.runId === "string" && parsed.runId ? parsed.runId : makeId();
+    const runCompleted = Boolean(parsed?.runCompleted);
+    return { taskText, steps: normalized, settings, history, runId, runCompleted };
   } catch (e) {
-    return { taskText: "", steps: [], settings: defaultSettings() };
+    return { taskText: "", steps: [], settings: defaultSettings(), history: [], runId: makeId(), runCompleted: false };
   }
 }
 
@@ -1074,6 +1320,9 @@ function saveState() {
   const payload = {
     taskText: String(state.taskText ?? ""),
     steps: serializeSteps(state.steps, 0),
+    history: Array.isArray(state.history) ? state.history.slice(0, 200) : [],
+    runId: String(state.runId ?? ""),
+    runCompleted: Boolean(state.runCompleted),
     settings: {
       mode: String(state.settings?.mode ?? "proxy") === "direct" ? "direct" : "proxy",
       baseUrl: String(state.settings?.baseUrl ?? ""),

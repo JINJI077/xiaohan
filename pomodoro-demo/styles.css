@@ -11,6 +11,8 @@
 
   --radius: 16px;
   --shadow: 0 12px 30px rgba(17, 24, 39, 0.1);
+  --font-ui: "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "PingFang SC", "PingFang TC", "PingFang HK",
+    "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
 * {
@@ -24,8 +26,7 @@ body {
 
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
-    "Apple Color Emoji", "Segoe UI Emoji";
+  font-family: var(--font-ui);
   color: var(--text);
   background: radial-gradient(1200px 600px at 30% 10%, rgba(59, 130, 246, 0.12), transparent),
     radial-gradient(900px 500px at 70% 20%, rgba(239, 68, 68, 0.14), transparent), var(--bg);

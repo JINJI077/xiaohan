@@ -4,18 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ADHD 事项启动器 Demo</title>
-    <meta name="theme-color" content="#ff4fb3" />
+    <meta name="theme-color" content="#987b5a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="ADHD启动器" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="stylesheet" href="./styles.css?v=9" />
+    <link rel="stylesheet" href="./styles.css?v=22" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icon.svg" />
   </head>
   <body>
+    <nav class="view-switch" id="viewSwitch" aria-label="界面切换">
+      <div class="view-switch-indicator" id="viewIndicator" aria-hidden="true"></div>
+      <button class="view-switch-tab" type="button" data-action="view-start" data-view="start" aria-current="page">
+        启动
+      </button>
+      <button class="view-switch-tab" type="button" data-action="view-summary" data-view="summary">总结</button>
+    </nav>
     <div class="app">
-      <main class="card" aria-label="ADHD 友好事项启动器">
+      <main class="card" id="viewStart" aria-label="ADHD 友好事项启动器">
         <header class="header">
           <div class="brand">
             <div class="logo" aria-hidden="true">★</div>
@@ -107,11 +114,26 @@
           <span class="footer-mobile">点圆圈勾选，点条目展开/收起子清单</span>
         </footer>
       </main>
+
+      <main class="card" id="viewSummary" aria-label="总结" hidden>
+        <section class="summary-hero" aria-label="总结标题">
+          <span class="summary-hero-emoji" aria-hidden="true">🎉</span>
+          <h1 class="summary-hero-title">
+            你已经成功完成 <span class="summary-count" id="summaryCount">0</span> 件事情，恭喜！
+          </h1>
+          <span class="summary-hero-emoji" aria-hidden="true">🎉</span>
+        </section>
+
+        <section class="summary-body" aria-label="总结内容">
+          <div class="summary-empty" id="summaryEmpty" hidden>完成第一个大任务后，这里会出现相册一样的记录。</div>
+          <div class="summary-timeline" id="summaryTimeline"></div>
+        </section>
+      </main>
     </div>
 
     <div class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
     <div class="confetti" aria-hidden="true" id="confetti"></div>
 
-    <script src="./app.js?v=9" defer></script>
+    <script src="./app.js?v=22" defer></script>
   </body>
 </html>
