@@ -1,5 +1,15 @@
-const CACHE_NAME = "adhd-launcher-v25";
-const ASSETS = ["./", "./index.html", "./styles.css?v=22", "./app.js?v=22", "./manifest.webmanifest", "./icon.svg"];
+const CACHE_NAME = "adhd-launcher-v36";
+const ASSETS = [
+  "./",
+  "./index.html",
+  "./styles.css?v=33",
+  "./app.js?v=33",
+  "./manifest.webmanifest",
+  "./icon.svg",
+  "./图片素材/花园.png",
+  "./图片素材/小草-没花.png",
+  "./图片素材/小草-有花版本.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

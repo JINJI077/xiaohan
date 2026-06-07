@@ -1,5 +1,9 @@
 const STORAGE_KEY = "adhdLauncherV1";
 const LLM_ENDPOINT = "/api/llm/chat";
+const GRASS_SPROUT_SRC = "./图片素材/小草-没花.png";
+const GRASS_BLOOM_SRC = "./图片素材/小草-有花版本.png";
+const GRASS_BLOOM_MESSAGE = "加油！小草开花，事情准备完成啦~";
+const GRASS_POS_KEY = "adhdGrassPosV1";
 
 const els = {
   taskInput: document.getElementById("taskInput"),
@@ -12,6 +16,7 @@ const els = {
   viewSummary: document.getElementById("viewSummary"),
   viewSwitch: document.getElementById("viewSwitch"),
   viewIndicator: document.getElementById("viewIndicator"),
+  summaryBgArt: document.getElementById("summaryBgArt"),
   summaryCount: document.getElementById("summaryCount"),
   summaryEmpty: document.getElementById("summaryEmpty"),
   summaryTimeline: document.getElementById("summaryTimeline"),
@@ -21,6 +26,9 @@ const els = {
   apiModel: document.getElementById("apiModel"),
   aiNotes: document.getElementById("aiNotes"),
   settingsHint: document.getElementById("settingsHint"),
+  grassProgress: document.getElementById("grassProgress"),
+  grassProgressImg: document.getElementById("grassProgressImg"),
+  grassProgressFloat: document.getElementById("grassProgressFloat"),
   toast: document.querySelector(".toast"),
   confetti: document.getElementById("confetti"),
 };
@@ -30,6 +38,9 @@ let toastTimer = null;
 let notesSeq = 0;
 let currentView = "start";
 let viewTabs = [];
+let grassStage = "hidden";
+let grassRunId = "";
+let grassDrag = null;
 
 boot();
 
@@ -42,6 +53,7 @@ function boot() {
   renderSummary();
   render();
   wire();
+  initGrassDrag();
   registerServiceWorker();
   maybeGenerateAiNotes();
   if (!state.steps || state.steps.length === 0) setBubble(pickMessage("idle"));
@@ -154,12 +166,18 @@ function setView(next) {
   currentView = v;
   applyView();
   syncViewSwitch();
-  if (currentView === "summary") renderSummary();
+  if (currentView === "summary") {
+    renderSummary();
+    requestAnimationFrame(() => animateSummary());
+  }
 }
 
 function applyView() {
   if (els.viewStart) els.viewStart.hidden = currentView !== "start";
   if (els.viewSummary) els.viewSummary.hidden = currentView !== "summary";
+  if (els.summaryBgArt) els.summaryBgArt.hidden = currentView !== "summary";
+  document.body.classList.toggle("is-summary", currentView === "summary");
+  refreshGrassProgressUI();
 }
 
 function syncViewSwitch({ immediate } = {}) {
@@ -212,6 +230,7 @@ function recordCompletionIfNeeded() {
     taskText,
     totalSteps: total,
     completedAt: new Date().toISOString(),
+    steps: serializeSteps(state.steps),
   };
 
   const next = [entry, ...history].slice(0, 200);
@@ -220,6 +239,28 @@ function recordCompletionIfNeeded() {
   saveState();
   renderSummary();
   return true;
+}
+
+function animateSummary() {
+  const hero = document.querySelector(".summary-hero");
+  const body = document.querySelector(".summary-body");
+  const groups = document.querySelectorAll(".day-group");
+  if (hero) {
+    hero.classList.remove("is-animate");
+    hero.getBoundingClientRect();
+    hero.classList.add("is-animate");
+  }
+  if (body) {
+    body.classList.remove("is-animate");
+    body.getBoundingClientRect();
+    body.classList.add("is-animate");
+  }
+  groups.forEach((g, i) => {
+    g.style.setProperty("--i", String(i));
+    g.classList.remove("is-enter");
+    g.getBoundingClientRect();
+    g.classList.add("is-enter");
+  });
 }
 
 function renderSummary() {
@@ -317,12 +358,152 @@ function renderSummary() {
 
       card.appendChild(time);
       card.appendChild(title);
+
+      const hasSteps = Array.isArray(entry.steps);
+      if (hasSteps) {
+        const expandBtn = document.createElement("button");
+        expandBtn.type = "button";
+        expandBtn.className = "event-expand";
+        expandBtn.textContent = "›";
+        expandBtn.setAttribute("aria-label", "查看步骤");
+        expandBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          showStepPopup(entry, expandBtn);
+        });
+        card.appendChild(expandBtn);
+      }
+
       grid.appendChild(card);
     }
 
     groupEl.appendChild(stamp);
     groupEl.appendChild(grid);
     els.summaryTimeline.appendChild(groupEl);
+  }
+}
+
+function showStepPopup(entry, anchorEl) {
+  const old = document.querySelector(".step-popup-backdrop");
+  if (old) old.remove();
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "step-popup-backdrop";
+
+  const popup = document.createElement("div");
+  popup.className = "step-popup";
+  popup.setAttribute("role", "dialog");
+  popup.setAttribute("aria-label", "步骤详情");
+
+  const header = document.createElement("div");
+  header.className = "step-popup-header";
+
+  const title = document.createElement("div");
+  title.className = "step-popup-title";
+  title.textContent = String(entry.taskText ?? "");
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "step-popup-close";
+  closeBtn.textContent = "×";
+  closeBtn.setAttribute("aria-label", "关闭");
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const stepList = document.createElement("div");
+  stepList.className = "step-popup-steps";
+  if (Array.isArray(entry.steps) && entry.steps.length > 0) {
+    renderPopupSteps(entry.steps, stepList, 0);
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "step-popup-empty";
+    empty.textContent = "暂无详细步骤";
+    stepList.appendChild(empty);
+  }
+
+  popup.appendChild(header);
+  popup.appendChild(stepList);
+  backdrop.appendChild(popup);
+  document.body.appendChild(backdrop);
+  popup.getBoundingClientRect();
+  popup.classList.add("is-open");
+
+  function closePopup() {
+    document.removeEventListener("keydown", onKeyDown);
+    backdrop.remove();
+  }
+
+  function onKeyDown(e) {
+    if (e.key === "Escape") closePopup();
+  }
+  document.addEventListener("keydown", onKeyDown);
+
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) closePopup();
+  });
+  closeBtn.addEventListener("click", closePopup);
+
+  positionPopup(popup, anchorEl);
+}
+
+function positionPopup(popup, anchorEl) {
+  const anchorRect = anchorEl.getBoundingClientRect();
+  const popupW = 340;
+  const popupH = popup.getBoundingClientRect().height || 300;
+  const gap = 10;
+
+  let left = anchorRect.right + gap;
+  let top = anchorRect.top;
+
+  if (left + popupW > window.innerWidth - 12) {
+    left = anchorRect.left - popupW - gap;
+  }
+  if (left < 12) {
+    left = 12;
+  }
+
+  if (top + popupH > window.innerHeight - 12) {
+    top = window.innerHeight - popupH - 12;
+  }
+  if (top < 12) {
+    top = 12;
+  }
+
+  popup.style.left = `${Math.round(left)}px`;
+  popup.style.top = `${Math.round(top)}px`;
+}
+
+function renderPopupSteps(steps, container, depth) {
+  const arr = Array.isArray(steps) ? steps : [];
+  for (const step of arr) {
+    const div = document.createElement("div");
+    div.className = depth === 0 ? "popup-step" : "popup-step is-child";
+
+    const bullet = document.createElement("span");
+    bullet.className = "popup-step-bullet";
+    if (step.done) {
+      bullet.classList.add("is-done");
+      bullet.textContent = "✓";
+    } else {
+      bullet.textContent = "•";
+    }
+
+    const text = document.createElement("span");
+    text.className = "popup-step-text";
+    if (step.done) text.classList.add("is-done");
+    text.textContent = String(step.text ?? "");
+
+    div.appendChild(bullet);
+    div.appendChild(text);
+
+    if (Array.isArray(step.children) && step.children.length > 0) {
+      const children = document.createElement("div");
+      children.className = "popup-step-children";
+      renderPopupSteps(step.children, children, depth + 1);
+      div.appendChild(children);
+    }
+
+    container.appendChild(div);
   }
 }
 
@@ -619,6 +800,7 @@ function toggleStep(id) {
     setBubble(pickMessage("done_all"));
     recordCompletionIfNeeded();
     launchConfetti();
+    setTimeout(() => setView("summary"), 800);
     return;
   }
   if (nextDone) {
@@ -850,9 +1032,153 @@ function render(opts = {}) {
     if (doneCount > 0 && doneCount < total) setBubble(pickMessage(pct < 0.34 ? "mid_early" : pct < 0.75 ? "mid_mid" : "mid_late"));
   }
 
+  updateGrassProgressUI({ doneCount, total, pct });
+
   if (focusId) {
     const el = els.steps.querySelector(`[data-step-action="edit"][data-step-id="${cssEscape(focusId)}"]`);
     if (el) el.focus();
+  }
+}
+
+function refreshGrassProgressUI() {
+  const steps = Array.isArray(state.steps) ? state.steps : [];
+  updateGrassProgressUI(getProgress(steps));
+}
+
+function playGrassFloat(text) {
+  if (!els.grassProgressFloat) return;
+  els.grassProgressFloat.textContent = String(text ?? "");
+  els.grassProgressFloat.classList.remove("is-play");
+  els.grassProgressFloat.getBoundingClientRect();
+  els.grassProgressFloat.classList.add("is-play");
+}
+
+function clampGrassProgressPosition() {
+  if (!els.grassProgress) return;
+  const leftRaw = Number.parseFloat(els.grassProgress.style.left);
+  const topRaw = Number.parseFloat(els.grassProgress.style.top);
+  if (!Number.isFinite(leftRaw) || !Number.isFinite(topRaw)) return;
+  const rect = els.grassProgress.getBoundingClientRect();
+  const w = rect.width || 168;
+  const h = rect.height || 90;
+  const maxLeft = Math.max(0, window.innerWidth - w);
+  const maxTop = Math.max(0, window.innerHeight - h);
+  const left = Math.min(maxLeft, Math.max(0, leftRaw));
+  const top = Math.min(maxTop, Math.max(0, topRaw));
+  els.grassProgress.style.right = "auto";
+  els.grassProgress.style.bottom = "auto";
+  els.grassProgress.style.left = `${left}px`;
+  els.grassProgress.style.top = `${top}px`;
+}
+
+function loadGrassProgressPosition() {
+  try {
+    const raw = localStorage.getItem(GRASS_POS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    const left = Number(data?.left);
+    const top = Number(data?.top);
+    if (!Number.isFinite(left) || !Number.isFinite(top)) return;
+    els.grassProgress.style.right = "auto";
+    els.grassProgress.style.bottom = "auto";
+    els.grassProgress.style.left = `${left}px`;
+    els.grassProgress.style.top = `${top}px`;
+    clampGrassProgressPosition();
+  } catch (_) {}
+}
+
+function saveGrassProgressPosition() {
+  if (!els.grassProgress) return;
+  const left = Number.parseFloat(els.grassProgress.style.left);
+  const top = Number.parseFloat(els.grassProgress.style.top);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return;
+  try {
+    localStorage.setItem(GRASS_POS_KEY, JSON.stringify({ left, top }));
+  } catch (_) {}
+}
+
+function initGrassDrag() {
+  if (!els.grassProgress) return;
+  if (grassDrag) return;
+  grassDrag = { active: false, pointerId: null, offsetX: 0, offsetY: 0 };
+  loadGrassProgressPosition();
+
+  window.addEventListener("resize", () => clampGrassProgressPosition());
+
+  els.grassProgress.addEventListener("pointerdown", (e) => {
+    if (!els.grassProgress.classList.contains("is-show")) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    const rect = els.grassProgress.getBoundingClientRect();
+    grassDrag.active = true;
+    grassDrag.pointerId = e.pointerId;
+    grassDrag.offsetX = e.clientX - rect.left;
+    grassDrag.offsetY = e.clientY - rect.top;
+    els.grassProgress.classList.add("is-dragging");
+    try {
+      els.grassProgress.setPointerCapture(e.pointerId);
+    } catch (_) {}
+  });
+
+  const endDrag = () => {
+    if (!grassDrag?.active) return;
+    grassDrag.active = false;
+    grassDrag.pointerId = null;
+    els.grassProgress.classList.remove("is-dragging");
+    saveGrassProgressPosition();
+  };
+
+  window.addEventListener("pointermove", (e) => {
+    if (!grassDrag?.active) return;
+    if (grassDrag.pointerId !== null && e.pointerId !== grassDrag.pointerId) return;
+    const left = e.clientX - grassDrag.offsetX;
+    const top = e.clientY - grassDrag.offsetY;
+    els.grassProgress.style.right = "auto";
+    els.grassProgress.style.bottom = "auto";
+    els.grassProgress.style.left = `${left}px`;
+    els.grassProgress.style.top = `${top}px`;
+    clampGrassProgressPosition();
+  });
+
+  window.addEventListener("pointerup", endDrag);
+  window.addEventListener("pointercancel", endDrag);
+}
+
+function updateGrassProgressUI({ doneCount, total, pct } = {}) {
+  if (!els.grassProgress || !els.grassProgressImg || !els.grassProgressFloat) return;
+  const t = Number(total || 0);
+  const d = Number(doneCount || 0);
+  const p = Number(pct || 0);
+  const nextRunId = typeof state.runId === "string" ? state.runId : "";
+
+  if (grassRunId && nextRunId && grassRunId !== nextRunId) {
+    grassRunId = nextRunId;
+    grassStage = "hidden";
+    els.grassProgressFloat.classList.remove("is-play");
+    els.grassProgressFloat.textContent = "";
+  } else if (!grassRunId) {
+    grassRunId = nextRunId;
+  }
+
+  const shouldShow = currentView === "start" && t > 0;
+  els.grassProgress.classList.toggle("is-show", shouldShow);
+  if (!shouldShow) return;
+  clampGrassProgressPosition();
+
+  const nextStage = d === t || p >= 0.9 ? "bloom" : "sprout";
+  if (grassStage !== nextStage) {
+    grassStage = nextStage;
+    if (grassStage === "bloom") {
+      els.grassProgressImg.src = GRASS_BLOOM_SRC;
+      if (d < t) playGrassFloat(GRASS_BLOOM_MESSAGE);
+    } else {
+      els.grassProgressImg.src = GRASS_SPROUT_SRC;
+    }
+    return;
+  }
+
+  if (!els.grassProgressImg.getAttribute("src")) {
+    els.grassProgressImg.src = grassStage === "bloom" ? GRASS_BLOOM_SRC : GRASS_SPROUT_SRC;
   }
 }
 
@@ -1286,6 +1612,7 @@ function normalizeLoadedHistory(rawHistory) {
       taskText,
       totalSteps: Number.isFinite(raw?.totalSteps) ? raw.totalSteps : undefined,
       completedAt: d.toISOString(),
+      steps: normalizeLoadedSteps(Array.isArray(raw?.steps) ? raw.steps : [], taskText, 0),
     });
   }
   return out;
